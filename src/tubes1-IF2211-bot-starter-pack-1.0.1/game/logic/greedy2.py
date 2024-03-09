@@ -5,23 +5,36 @@ from game.logic.base import BaseLogic
 from game.models import GameObject, Board, Position
 from ..util import get_direction
 
-
 class GreedyLogic2(BaseLogic):
     def __init__(self):
         self.directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
-        self.goal_position: Optional[Position] = None
         self.current_direction = 0
 
+    def find_nearest_diamond(self, board_bot: GameObject, board: Board):
+        current_position = board_bot.position
+        diamonds_positions = [diamond.position for diamond in board.diamonds]
+
+        if diamonds_positions:
+            # Find the nearest diamond using the Manhattan distance
+            min_distance = float('inf')
+            for diamond_position in diamonds_positions:
+                distance = abs(current_position.x - diamond_position.x) + abs(current_position.y - diamond_position.y)
+                if distance < min_distance:
+                    min_distance = distance
+                    self.goal_position = diamond_position
+
     def next_move(self, board_bot: GameObject, board: Board):
+        temp: List[GameObject] = [
+            d for d in board.game_objects if d.type =="TeleportGameObject"
+        ]
         props = board_bot.properties
         # Analyze new state
-        if props.diamonds == 5 or props.milliseconds_left < 10000 :
+        if props.diamonds == 5 or props.milliseconds_left < 10000:
             # Move to base
-            base = board_bot.properties.base
-            self.goal_position = base
+            self.goal_position = board_bot.properties.base
         else:
-            # Just roam around
-            self.goal_position = None
+            # Find the nearest diamond
+            self.find_nearest_diamond(board_bot, board)
 
         current_position = board_bot.position
         if self.goal_position:
@@ -33,12 +46,13 @@ class GreedyLogic2(BaseLogic):
                 self.goal_position.y,
             )
         else:
-            # Roam around
-            delta = self.directions[self.current_direction]
-            delta_x = delta[0]
-            delta_y = delta[1]
+            # Roam towards the nearest diamond
+            delta_x, delta_y = self.directions[self.current_direction]
+
+            # Check if a random move should be made
             if random.random() > 0.6:
                 self.current_direction = (self.current_direction + 1) % len(
                     self.directions
                 )
+
         return delta_x, delta_y
