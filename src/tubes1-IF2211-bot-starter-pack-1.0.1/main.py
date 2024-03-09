@@ -6,6 +6,7 @@ from game.api import Api
 from game.board_handler import BoardHandler
 from game.bot_handler import BotHandler
 from game.logic.random import RandomLogic
+from game.logic.ultimate import GreedyLogicUltimate
 from game.logic.greedy import GreedyLogic
 from game.logic.attack import AttackLogic
 from game.util import *
@@ -18,6 +19,7 @@ CONTROLLERS = {
     "Random": RandomLogic,
     "Greedy": GreedyLogic,
     "Attack": AttackLogic,
+    "Ultimate": GreedyLogicUltimate,
 }
 
 ###############################################################################

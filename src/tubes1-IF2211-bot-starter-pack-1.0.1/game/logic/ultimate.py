@@ -1,11 +1,12 @@
 import heapq
+import random
 from typing import Optional, List, Tuple
 
 from game.logic.base import BaseLogic
 from game.models import GameObject, Board, Position
 from ..util import get_direction
 
-class GreedyLogic(BaseLogic):
+class GreedyLogicUltimate(BaseLogic):
     def __init__(self):
         self.directions = [(1, 0), (0, 1), (-1, 0), (0, -1)]
         self.goal_position: Optional[Position] = None
@@ -26,6 +27,11 @@ class GreedyLogic(BaseLogic):
         ]
         teleport1: GameObject = tele[0]
         teleport2: GameObject = tele[1]
+
+        # Check if there are nearby enemy bots
+        nearby_enemy_bots = [enemy_bot for enemy_bot in board.bots if enemy_bot != board_bot and self.is_nearby(current_position, enemy_bot.position)]
+
+        print(nearby_enemy_bots)
 
         if props.diamonds == 5:
             # Move to base
@@ -51,36 +57,52 @@ class GreedyLogic(BaseLogic):
                 # Use the distance as the priority
                 heapq.heappush(diamonds_queue, (distance, index))
 
-            # Get the diamond with the smallest distance
-            if props.diamonds == 4:
+            if current_position == props.base:
                 min_distance, nearest_diamond_index = heapq.heappop(diamonds_queue)
-                # if the distance to the base is nearer than the nearest diamond, move to the base
-                if (abs(props.base.x - current_position.x) + abs(props.base.y - current_position.y)) < min_distance and props.diamonds != 0:
-                    self.goal_position = props.base
-                else:
-                    # Check if the nearest diamond has 1 point
-                    if board.diamonds[nearest_diamond_index].properties.points == 1:
-                        self.goal_position = board.diamonds[nearest_diamond_index].position
+                self.goal_position = board.diamonds[nearest_diamond_index].position
+            else:
+                # Get the diamond with the smallest distance
+                if props.diamonds == 4:
+                    if nearby_enemy_bots:
+                        nearest_enemy_bot = min(key=lambda bot: self.calculate_distance(current_position, bot.position))
+                        self.goal_position = nearest_enemy_bot.position
                     else:
-                        # If the nearest diamond does not have 1 point, find the next nearest diamond
-                        while board.diamonds[nearest_diamond_index].properties.points != 1 and diamonds_queue:
-                            min_distance, nearest_diamond_index = heapq.heappop(diamonds_queue)
-                        self.goal_position = board.diamonds[nearest_diamond_index].position
-            else:          
-                min_distance, nearest_diamond_index = heapq.heappop(diamonds_queue)
-                if (abs(props.base.x - current_position.x) + abs(props.base.y - current_position.y)) < min_distance and props.diamonds != 0:
-                        self.goal_position = props.base
-                elif button_distance < min_distance:
-                        self.goal_position = button.position
-                else:
-                    self.goal_position = board.diamonds[nearest_diamond_index].position
+                        min_distance, nearest_diamond_index = heapq.heappop(diamonds_queue)
+                        # if the distance to the base is nearer than the nearest diamond, move to the base
+                        if (abs(props.base.x - current_position.x) + abs(props.base.y - current_position.y)) < min_distance and props.diamonds != 0:
+                            self.goal_position = props.base
+                        else:
+                            # Check if the nearest diamond has 1 point
+                            if board.diamonds[nearest_diamond_index].properties.points == 1:
+                                self.goal_position = board.diamonds[nearest_diamond_index].position
+                            else:
+                                # If the nearest diamond does not have 1 point, find the next nearest diamond
+                                while board.diamonds[nearest_diamond_index].properties.points != 1 and diamonds_queue:
+                                    min_distance, nearest_diamond_index = heapq.heappop(diamonds_queue)
+                                self.goal_position = board.diamonds[nearest_diamond_index].position
+                else:          
+                    min_distance, nearest_diamond_index = heapq.heappop(diamonds_queue)
+                    if nearby_enemy_bots:
+                        nearest_enemy_bot = min(key=lambda bot: self.calculate_distance(current_position, bot.position))
+                        self.goal_position = nearest_enemy_bot.position
+                    else:
+                        if (abs(props.base.x - current_position.x) + abs(props.base.y - current_position.y)) < min_distance and props.diamonds != 0:
+                                self.goal_position = props.base
+                        elif button_distance < min_distance:
+                                self.goal_position = button.position
+                        else:
+                            self.goal_position = board.diamonds[nearest_diamond_index].position
 
-            # if the distance to the base is the same with the time left, move to the base
-            if (props.milliseconds_left / 1000) <= (abs(props.base.x - current_position.x) + abs(props.base.y - current_position.y) + 2) and props.diamonds != 0:
-                self.goal_position = props.base
-            
-            if (props.milliseconds_left / 1000) < 2 and current_position == props.base:
-                delta_x, delta_y = 0, 1
+                # if the distance to the base is the same with the time left, move to the base
+                if (props.milliseconds_left / 1000) <= (abs(props.base.x - current_position.x) + abs(props.base.y - current_position.y) + 2):
+                    if nearby_enemy_bots:
+                        nearest_enemy_bot = min(key=lambda bot: self.calculate_distance(current_position, bot.position))
+                        self.goal_position = nearest_enemy_bot.position
+                    else:
+                        self.goal_position = props.base
+                
+            if (props.milliseconds_left / 1000) < 10 and current_position == props.base:
+                self.goal_position = None
             
             if self.goal_position == props.base:
                 teleport_in_path = self.is_teleport_in_path(current_position, props.base, teleport1, teleport2)
@@ -129,3 +151,12 @@ class GreedyLogic(BaseLogic):
         delta_x, delta_y = get_direction(current_position.x, current_position.y, teleport_position.x, teleport_position.y)
         new_goal_position = Position(teleport_position.x + delta_x, teleport_position.y + delta_y)
         return new_goal_position
+
+    def is_nearby(self, position1: Position, position2: Position, distance_threshold: int = 1):
+        """Check if two positions are nearby within a given distance threshold."""
+        distance = abs(position1.x - position2.x) + abs(position1.y - position2.y)
+        return distance <= distance_threshold
+
+    def calculate_distance(self, position1: Position, position2: Position):
+        """Calculate the distance between two positions."""
+        return abs(position1.x - position2.x) + abs(position1.y - position2.y)
